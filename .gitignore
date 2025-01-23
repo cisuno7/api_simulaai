@@ -1,0 +1,27 @@
+# Ignorar arquivo .env (variáveis de ambiente)
+.env
+
+# Ignorar node_modules (dependências do projeto)
+node_modules/
+
+# Ignorar logs
+logs/
+*.log
+
+# Ignorar arquivos de IDE
+.idea/
+.vscode/
+
+# Ignorar build (pasta de compilação, se houver)
+dist/
+build/
+
+# Ignorar arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Ignorar arquivos de configuração local
+*.local
+
+# Ignorar arquivos de cache
+.cache/
