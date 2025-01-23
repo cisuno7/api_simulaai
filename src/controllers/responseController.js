@@ -21,7 +21,7 @@ export const saveResponse = async (req, res) => {
 
     res.json({ responseId: responseRef.id });
   } catch (error) {
-    console.error('Erro ao salvar respostas:', error);
+    console.error('Erro ao salvar  as resposta:', error);
     res.status(500).json({ error: 'Erro ao salvar respostas.' });
   }
 };
