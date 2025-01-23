@@ -7,64 +7,83 @@ import { getLoggedInUser } from "../services/authService.js";
 /**
  * Busca os simulados do usuário, ordenados por data (do mais recente para o mais antigo) e limitados a 10 resultados.
  */
-export const getSimulados = async (req, res, next) => {
-  const { userId } = req.query;
 
-  if (!userId) {
-    return res.status(400).json({ error: "userId é obrigatório." });
-  }
-
+export const getSimulados = async (req, res) => {
   try {
-    const simuladosQuery = query(
-      collection(db, "simulados"),
-      where("userId", "==", userId),
-      orderBy("createdAt", "desc"),
-      limit(10)
-    );
+    const { id, userId } = req.query;
 
-    const simuladosSnapshot = await getDocs(simuladosQuery);
-    const simulados = simuladosSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (id) {
+      // Busca um simulado específico por ID
+      const simuladoRef = doc(db, 'simulados', id);
+      const simuladoDoc = await getDoc(simuladoRef);
 
-    res.json({ simulados });
+      if (!simuladoDoc.exists()) {
+        return res.status(404).json({ error: 'Simulado não encontrado.' });
+      }
+
+      const simulado = { id: simuladoDoc.id, ...simuladoDoc.data() };
+      return res.json(simulado);
+    }
+
+    if (userId) {
+      // Busca o histórico de simulados do usuário
+      const simuladosRef = collection(db, 'simulados');
+      const q = query(simuladosRef, where('userId', '==', userId));
+      const querySnapshot = await getDocs(q);
+
+      const history = [];
+      querySnapshot.forEach((doc) => {
+        history.push({ id: doc.id, ...doc.data() });
+      });
+
+      return res.json({ simulados: history });
+    }
+
+    // Busca todos os simulados
+    const simuladosRef = collection(db, 'simulados');
+    const querySnapshot = await getDocs(simuladosRef);
+
+    const simulados = [];
+    querySnapshot.forEach((doc) => {
+      simulados.push({ id: doc.id, ...doc.data() });
+    });
+
+    res.json(simulados);
   } catch (error) {
-    next(error);
+    console.error('Erro ao buscar simulados:', error);
+    res.status(500).json({ error: 'Erro ao buscar simulados.' });
   }
 };
 
 /**
  * Cria um novo simulado com base em um arquivo PDF enviado pelo usuário.
  */
-export const createSimulado = async (req, res, next) => {
-  const { file, title } = req;
-
+export const createSimulado = async (req, res) => {
   try {
-    // Verifica se o arquivo foi recebido
+    const { userId, title } = req.body;
+    const file = req.file;
+
     if (!file) {
-      return res.status(400).json({ error: "Nenhum arquivo enviado." });
+      return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
     }
 
-    // Recupera o usuário logado
-    const user = await getLoggedInUser();
-    if (!user) {
-      return res.status(401).json({ error: "Usuário não autenticado." });
-    }
-
-    // Extrai o texto do PDF
+    // Extrai o texto do PDF (você já tem essa lógica)
     const text = await extractTextFromPDF(file);
 
-    // Gera as questões com a OpenAI
+    // Gera as questões com a OpenAI (você já tem essa lógica)
     const questions = await generateQuestionsWithAI(text);
 
     // Salva o simulado no Firestore
-    const simuladoRef = await addDoc(collection(db, "simulados"), {
-      userId: user.uid,
+    const simuladoRef = await addDoc(collection(db, 'simulados'), {
+      userId,
       title,
       questions,
-      createdAt: Timestamp.now(),
+      createdAt: serverTimestamp(),
     });
 
     res.json({ simuladoId: simuladoRef.id, questions });
   } catch (error) {
-    next(error);
+    console.error('Erro ao criar simulado:', error);
+    res.status(500).json({ error: 'Erro ao criar simulado.' });
   }
 };
