@@ -1,11 +1,11 @@
 
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc,serverTimestamp  } from "firebase/firestore";
 import { getLoggedInUser } from "../services/authService.js";
 import  {db}  from "../config/firebaseConfig.js"
 /**
  * Salva as respostas de um simulado no Firestore.
  */
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+
 
 export const saveResponse = async (req, res) => {
   try {

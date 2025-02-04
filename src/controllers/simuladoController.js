@@ -1,5 +1,5 @@
 import { db } from "../config/firebaseConfig.js";
-import { collection, query, where, getDocs, orderBy, limit, addDoc, Timestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { extractTextFromPDF } from "../services/pdfService.js";
 import { generateQuestionsWithAI } from "../services/openAIService.js";
 import { getLoggedInUser } from "../services/authService.js";
@@ -7,73 +7,103 @@ import { getLoggedInUser } from "../services/authService.js";
 /**
  * Busca os simulados do usuário, ordenados por data (do mais recente para o mais antigo) e limitados a 10 resultados.
  */
-
-export const getSimulados = async (req, res) => {
+export const getSimuladoById = async (req, res) => {
   try {
-    const { id, userId } = req.query;
+    const { id } = req.params;
+    console.log('ID recebido:', req.params.id);
+    const simuladoDoc = doc(db, 'simulados', id);
+    const simuladoSnapshot = await getDoc(simuladoDoc);
 
-    if (id) {
-      // Busca um simulado específico por ID
-      const simuladoRef = doc(db, 'simulados', id);
-      const simuladoDoc = await getDoc(simuladoRef);
-
-      if (!simuladoDoc.exists()) {
-        return res.status(404).json({ error: 'Simulado não encontrado.' });
-      }
-
-      const simulado = { id: simuladoDoc.id, ...simuladoDoc.data() };
-      return res.json(simulado);
+    if (!simuladoSnapshot.exists()) {
+      return res.status(404).json({ error: 'Simulado não encontrado.' });
     }
 
-    if (userId) {
-      // Busca o histórico de simulados do usuário
-      const simuladosRef = collection(db, 'simulados');
-      const q = query(simuladosRef, where('userId', '==', userId));
-      const querySnapshot = await getDocs(q);
-
-      const history = [];
-      querySnapshot.forEach((doc) => {
-        history.push({ id: doc.id, ...doc.data() });
-      });
-
-      return res.json({ simulados: history });
-    }
-
-    // Busca todos os simulados
-    const simuladosRef = collection(db, 'simulados');
-    const querySnapshot = await getDocs(simuladosRef);
-
-    const simulados = [];
-    querySnapshot.forEach((doc) => {
-      simulados.push({ id: doc.id, ...doc.data() });
-    });
-
-    res.json(simulados);
+    res.json({ id: simuladoSnapshot.id, ...simuladoSnapshot.data() });
   } catch (error) {
-    console.error('Erro ao buscar simulados:', error);
-    res.status(500).json({ error: 'Erro ao buscar simulados.' });
+    console.error('Erro ao buscar simulado:', error);
+    res.status(500).json({ error: 'Erro ao buscar simulado.' });
   }
 };
 
 /**
  * Cria um novo simulado com base em um arquivo PDF enviado pelo usuário.
  */
+
 export const createSimulado = async (req, res) => {
   try {
-    const { userId, title } = req.body;
+    console.log('Dados recebidos:', req.body);
+
+    // Remove a declaração duplicada
+    const bodyFields = Object.keys(req.body).reduce((acc, key) => {
+      acc[key.trim()] = req.body[key];
+      return acc;
+    }, {});
+
+    // Declaração única das variáveis
+    const { userId, title, questionCount: qCount, difficulty: diff } = bodyFields;
     const file = req.file;
 
+    // Validações iniciais
+    if (!qCount) {
+      return res.status(400).json({ error: 'Número de questões não fornecido.' });
+    }
     if (!file) {
       return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
     }
+    if (!diff) {
+      return res.status(400).json({
+        error: 'Dificuldade não informada',
+        details: 'O campo difficulty é obrigatório'
+      });
+    }
 
-    // Extrai o texto do PDF (você já tem essa lógica)
-    const text = await extractTextFromPDF(file);
+    // Converta para número
+    const numQuestions = parseInt(qCount, 10);
+    if (isNaN(numQuestions) || numQuestions < 1 || numQuestions > 20) {
+      return res.status(400).json({
+        error: 'Número de questões inválido',
+        details: `Valor recebido: ${qCount} (Tipo: ${typeof qCount})`
+      });
+    }
 
-    // Gera as questões com a OpenAI (você já tem essa lógica)
-    const questions = await generateQuestionsWithAI(text);
+    // Processamento da dificuldade
+    const cleanDifficulty = diff
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[éê]/g, 'e')
+      .toLowerCase();
 
-    // Salva o simulado no Firestore
+    const difficultyMap = {
+      facil: 'Fácil',
+      medio: 'Médio',
+      dificil: 'Difícil'
+    };
+
+    const normalizedDifficulty = difficultyMap[cleanDifficulty] || diff;
+
+    const validDifficulties = ['Fácil', 'Médio', 'Difícil'];
+    if (!validDifficulties.includes(normalizedDifficulty)) {
+      return res.status(400).json({
+        error: 'Dificuldade inválida',
+        received: diff,
+        validOptions: validDifficulties
+      });
+    }
+
+    // Validação do PDF
+    if (file.mimetype !== 'application/pdf') {
+      return res.status(400).json({ error: 'O arquivo enviado não é um PDF válido.' });
+    }
+
+    // Geração das questões
+    const questions = await generateQuestionsWithAI(
+      file.buffer,
+      numQuestions,
+      normalizedDifficulty
+    );
+
+    // Salvamento no Firestore
     const simuladoRef = await addDoc(collection(db, 'simulados'), {
       userId,
       title,

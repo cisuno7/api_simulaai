@@ -9,7 +9,12 @@ export const errorHandler = (err, req, res, next) => {
   const statusCode = err.statusCode || 500;
 
   // Define a mensagem de erro
-  const message = err.message || "Ocorreu um erro interno no servidor.";
+  let message = err.message || "Ocorreu um erro interno no servidor.";
+
+  // Lógica específica para erro 429
+  if (statusCode === 429) {
+    message = "Cota da API excedida. Por favor, tente novamente mais tarde.";
+  }
 
   // Envia a resposta JSON ao cliente
   res.status(statusCode).json({
