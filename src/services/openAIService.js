@@ -1,109 +1,128 @@
 import dotenv from 'dotenv';
+import axios from 'axios';
 import { extractTextFromPDF } from './pdfService.js';
 
 dotenv.config();
-console.log("Environment variables loaded:", process.env);
 
-export const generateQuestionsWithAI = async (pdfBuffer, questionCount, difficulty) => {
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export const generateQuestionsWithAI = async (pdfBuffer, questionCount, simuladoId) => {
   try {
     const text = await extractTextFromPDF(pdfBuffer);
     const numQuestions = parseInt(questionCount, 10);
+    const shortenedText = text.substring(0, 2000); // Aumentei o limite para 2000 caracteres
 
-    const prompt = `Gere EXATAMENTE ${numQuestions} questões de múltipla escolha com dificuldade ${difficulty}.
-Formato obrigatório para cada questão:
-1. Enunciado claro.
-2. Exatamente 4 alternativas (A) a (D), no formato: A) Texto da alternativa
-3. A resposta correta DEVE estar na mesma linha da alternativa correta, com "(CORRETA)" ao lado da resposta certa. NÃO escreva "CORRETA" em uma nova linha.
+    console.log('Texto extraído:', shortenedText);
+    console.log('Número de perguntas:', numQuestions);
 
-Exemplo:
-Qual é a capital da França?
-A) Berlim
-B) Madrid
-C) Paris (CORRETA)
-D) Roma
+    const prompt = `Gere ${numQuestions} questões de múltipla escolha em português do Brasil sobre o seguinte texto:
+"${shortenedText}".
+    
+Cada questão deve ter:
+- Uma única resposta correta;
+- Quatro opções identificadas pelas letras "A", "B", "C" e "D";
+- A resposta correta deve ser representada por um objeto contendo a letra e o texto da opção correta.
 
-Texto de referência: ${text}`;
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
+Formato da resposta em STRICT JSON SEM comentários ou texto extra. Escape todas as aspas internas com \\". Exemplo válido:
+{
+  "simuladoId": "${simuladoId}",
+  "questions": [
+    {
+      "pergunta": "Texto da pergunta com \\"aspas\\" internas",
+      "opcoes": {
+        "A": "Opção A",
+        "B": "Opção B",
+        "C": "Opção C",
+        "D": "Opção D"
       },
-      body: JSON.stringify({
-        "model": "openai/gpt-3.5-turbo",
-        "messages": [
+      "correctAnswer": {
+        "letra": "A",
+        "texto": "Opção A"
+      }
+    }
+  ]
+}`;
+
+    let response;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      try {
+        response = await axios.post(
+          'https://openrouter.ai/api/v1/chat/completions',
           {
-            "role": "user",
-            "content": prompt
+            model: 'gpt-3.5-turbo', // Você pode ajustar o modelo conforme necessário
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 1024,
+            temperature: 0.7
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              'Content-Type': 'application/json'
+            }
           }
-        ]
-      })
-    });
-
-    const data = await response.json();
-    console.log("API Response:", data);
-
-    const generatedText = data.choices[0].message.content.trim();
-    const questionsArray = generatedText.split(/\d+\.\s+/).filter(q => q.trim() !== '');
-
-    if (questionsArray.length !== numQuestions) {
-      throw new Error(`A IA gerou ${questionsArray.length} questões em vez de ${numQuestions}`);
+        );
+        break;
+      } catch (error) {
+        if (error.response && error.response.status === 503) {
+          const estimatedTime = error.response.data.estimated_time || 10;
+          console.log(`API indisponível, tentando novamente em ${estimatedTime} segundos...`);
+          await delay(estimatedTime * 1000);
+          attempts++;
+        } else {
+          throw error;
+        }
+      }
     }
 
-    const formattedQuestions = questionsArray.map((q) => {
-      const lines = q.split('\n').map(line => line.trim()).filter(line => line !== '');
-      console.log('Processando questão:', lines);
+    if (!response) {
+      throw new Error('Não foi possível gerar questões após várias tentativas.');
+    }
 
-      const question = lines[0];
-      const options = [];
-      let correctAnswerIndex = null;
+    const responseData = response.data.choices[0].message.content;
 
-      lines.forEach((line) => {
-        const optionMatch = line.match(/^([A-D])\)\s*(.*?)(\s*\(CORRETA\))?\s*$/i);
+    // Tentar corrigir JSON malformado
+    const fixedResponseData = responseData
+      .replace(/\\/g, '\\\\') // Escapar barras invertidas primeiro
+      .replace(/([^\\]|^)"([^"]*?[^\\]|)"/g, '$1"$2"') // Aspas internas
+      .replace(/,\s*([}\]])/g, '$1') // Remover vírgulas finais
+      .replace(/'/g, "\\'"); // Escapar aspas simples
 
-        if (optionMatch) {
-          const optionText = optionMatch[2].trim();
-          options.push(optionText);
-
-          if (optionMatch[3]) {
-            correctAnswerIndex = options.length - 1; // Índice correto da resposta
-          }
-        } else if (/^\s*CORRETA\s*$/i.test(line)) {
-          console.warn('Resposta "CORRETA" isolada detectada. Verifique o formato da questão:', lines);
-        }
-      });
-
-      if (options.length !== 4) {
-        console.error('Opções inválidas:', options);
-        throw new Error(`Questão com número incorreto de opções: ${q.substring(0, 50)}...`);
+    const isValidJSON = (str) => {
+      try {
+        JSON.parse(str);
+        return true;
+      } catch {
+        return false;
       }
+    };
 
-      // Correção automática para casos com "CORRETA" isolado
-      if (correctAnswerIndex === null) {
-        const isolatedCorrect = lines.findIndex(line => /^\s*CORRETA\s*$/i.test(line));
-        if (isolatedCorrect !== -1 && isolatedCorrect > 0) {
-          correctAnswerIndex = isolatedCorrect - 1; // Assume que a resposta correta está acima
-          console.warn('Correção automática aplicada na questão:', question);
-        }
-      }
+    if (!isValidJSON(fixedResponseData)) {
+      console.error('JSON inválido:', fixedResponseData);
+      throw new Error('Resposta da IA em formato incorreto');
+    }
 
-      if (correctAnswerIndex === null) {
-        console.error('Nenhuma resposta correta encontrada:', lines);
-        throw new Error(`Formato de resposta inválido na questão: "${question}"`);
-      }
+    let formattedQuestions;
+    try {
+      formattedQuestions = JSON.parse(fixedResponseData);
+    } catch (jsonError) {
+      console.error('JSON problemático:', fixedResponseData.slice(jsonError.position - 50, jsonError.position + 50));
+      throw new Error(`Erro de parse: ${jsonError.message}. Trecho: ${fixedResponseData.slice(jsonError.position - 50, jsonError.position + 50)}`);
+    }
 
-      return {
-        question,
-        options,
-        answer: correctAnswerIndex // Índice da resposta correta (0-3)
-      };
-    });
+    console.log('JSON retornado:', JSON.stringify(formattedQuestions, null, 2));
 
     return formattedQuestions;
-
   } catch (error) {
-    console.error(`Erro: ${error.message}`);
-    throw new Error('Não foi possível gerar questões.');
+    if (error.response) {
+      const errorMessage = typeof error.response.data === 'object' ? JSON.stringify(error.response.data) : error.response.data;
+      throw new Error(`Erro ao gerar questões: ${error.response.status} - ${errorMessage}`);
+    } else if (error.request) {
+      throw new Error('Erro ao gerar questões: Nenhuma resposta recebida do servidor.');
+    } else {
+      throw new Error(`Erro ao gerar questões: ${error.message}`);
+    }
   }
 };

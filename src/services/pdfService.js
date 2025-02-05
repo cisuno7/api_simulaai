@@ -1,13 +1,22 @@
 import pkg from 'pdfjs-dist/legacy/build/pdf.js';
 const { getDocument } = pkg;
 
+// Função para limpar caracteres inválidos
+const cleanText = (text) => {
+  return text
+    .replace(/[^\x00-\x7F]/g, '') // Remove caracteres não-ASCII
+    .replace(/\uFFFD/g, '')       // Remove símbolos de substituição inválidos
+    .replace(/\s{2,}/g, ' ');     // Remove espaços em excesso
+};
+
 export const extractTextFromPDF = async (buffer) => {
   try {
-    // Inicializa a tarefa de carregamento do documento PDF
-    const loadingTask = getDocument({ data: buffer });
+    const loadingTask = getDocument({
+      data: buffer,
+      standardFontDataUrl: 'path/to/standard/font/data' // Adiciona o parâmetro necessário
+    });
     const pdfDocument = await loadingTask.promise;
 
-    // Verifica se o documento foi carregado com sucesso
     if (!pdfDocument) {
       throw new Error('Não foi possível carregar o documento PDF.');
     }
@@ -15,22 +24,31 @@ export const extractTextFromPDF = async (buffer) => {
     const numPages = pdfDocument.numPages;
     let extractedText = '';
 
-    // Itera sobre todas as páginas do PDF
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      const page = await pdfDocument.getPage(pageNum);
-      const textContent = await page.getTextContent();
+      let page;
+      try {
+        page = await pdfDocument.getPage(pageNum);
+      } catch (error) {
+        throw new Error(`Erro ao obter a página ${pageNum}: ${error.message}`);
+      }
 
-      // Extrai o texto da página e concatena com os resultados anteriores
+      let textContent;
+      try {
+        textContent = await page.getTextContent();
+      } catch (error) {
+        throw new Error(`Erro ao obter o conteúdo de texto da página ${pageNum}: ${error.message}`);
+      }
+
       const pageText = textContent.items.map((item) => item.str).join(' ');
       extractedText += pageText + '\n';
     }
 
-    // Libera recursos do documento PDF
     pdfDocument.cleanup();
 
-    return extractedText.trim(); // Remove espaços em branco no final
+    const cleanedText = cleanText(extractedText); // Limpeza do texto extraído
+
+    return cleanedText.trim();
   } catch (error) {
-    // Lida com erros ao carregar ou processar o PDF
     throw new Error('Erro ao extrair texto do PDF: ' + error.message);
   }
 };
