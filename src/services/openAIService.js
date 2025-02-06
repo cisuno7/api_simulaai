@@ -11,7 +11,7 @@ export const generateQuestionsWithAI = async (pdfBuffer, questionCount, simulado
     const text = await extractTextFromPDF(pdfBuffer);
     const numQuestions = parseInt(questionCount, 10);
     const shortenedText = text.substring(0, 2000); // Aumentei o limite para 2000 caracteres
-
+    const API_KEY = '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';
     console.log('Texto extraído:', shortenedText);
     console.log('Número de perguntas:', numQuestions);
 
@@ -59,7 +59,7 @@ Formato da resposta em STRICT JSON SEM comentários ou texto extra. Escape todas
           },
           {
             headers: {
-              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              Authorization: `Bearer ${API_KEY}`,
               'Content-Type': 'application/json'
             }
           }
