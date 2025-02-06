@@ -59,7 +59,7 @@ Formato da resposta em STRICT JSON SEM comentários ou texto extra. Escape todas
           },
           {
             headers: {
-              Authorization: `Bearer ${API_KEY}`,
+              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
               'Content-Type': 'application/json'
             }
           }
