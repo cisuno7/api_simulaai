@@ -1,44 +1,48 @@
-import pkg from 'pdfjs-dist/legacy/build/pdf.js';
-const { getDocument, GlobalWorkerOptions } = pkg;
+import PDFParser from "pdf2json";
 
-// Desabilita o worker para evitar o erro
-GlobalWorkerOptions.workerSrc = null;
-
-// Função para limpar caracteres inválidos
-const cleanText = (text) => {
+// Função para limpar o texto extraído
+const cleanExtractedText = (text) => {
   return text
-    .replace(/[^\x00-\x7F]/g, '') // Remove caracteres não-ASCII
-    .replace(/\uFFFD/g, '')       // Remove símbolos de substituição inválidos
-    .replace(/\s{2,}/g, ' ');     // Remove espaços em excesso
+    .replace(/\s+/g, ' ')       // Remove espaços múltiplos
+    .replace(/(\w)\s(\w)/g, '$1$2') // Remove espaços entre letras
+    .trim();                    // Remove espaços no início e no fim
 };
 
-export const extractTextFromPDF = async (buffer) => {
-  try {
-    if (!buffer || buffer.length === 0) {
-      throw new Error("PDF inválido ou vazio.");
-    }
+// Função principal para extrair texto de um PDF
+export const extractTextFromPDF = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const pdfParser = new PDFParser();
 
-    const MAX_PAGES = 10; // Limite de páginas
-    // Desabilita o worker para evitar o erro
-    const pdf = await getDocument({
-      data: new Uint8Array(buffer),
-      disableWorker: true
-    }).promise;
-    const numPages = Math.min(pdf.numPages, MAX_PAGES);
-    const extractedText = [];
+    // Trata erros durante a análise do PDF
+    pdfParser.on("pdfParser_dataError", (error) => {
+      pdfParser.destroy(); // Limpa recursos
+      reject(new Error(`Erro ao analisar PDF: ${error.message}`));
+    });
 
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const content = await page.getTextContent();
-      const pageText = content.items.map(item => item.str).join(' ');
-      extractedText.push(pageText);
-      await page.cleanup(); // Libera memória imediatamente
-    }
+    // Processa os dados quando estiverem prontos
+    pdfParser.on("pdfParser_dataReady", (data) => {
+      try {
+        // Extrai o texto de todas as páginas
+        const text = data.Pages
+          .map((page) =>
+            page.Texts
+              .map((textItem) => decodeURIComponent(textItem.R[0].T)) // Decodifica texto
+              .join(" ") // Junta palavras da mesma linha
+          )
+          .join("\n") // Separa páginas por quebra de linha
+          .trim();
 
-    await pdf.destroy(); // Destrói o documento completamente
-    return cleanText(extractedText.join('\n')).trim();
+        // Limpa o texto extraído
+        const cleanedText = cleanExtractedText(text);
 
-  } catch (error) {
-    throw new Error(`Erro ao extrair texto: ${error.message}`);
-  }
+        pdfParser.destroy(); // Libera memória
+        resolve(cleanedText); // Retorna o texto limpo
+      } catch (error) {
+        reject(new Error(`Erro ao processar texto: ${error.message}`));
+      }
+    });
+
+    // Inicia a análise do buffer do PDF
+    pdfParser.parseBuffer(buffer);
+  });
 };
