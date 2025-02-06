@@ -11,44 +11,31 @@ const cleanText = (text) => {
 
 export const extractTextFromPDF = async (buffer) => {
   try {
-    const loadingTask = getDocument({
-      data: buffer,
-      standardFontDataUrl: 'path/to/standard/font/data' // Adiciona o parâmetro necessário
-    });
-    const pdfDocument = await loadingTask.promise;
-
-    if (!pdfDocument) {
-      throw new Error('Não foi possível carregar o documento PDF.');
+    if (!buffer || buffer.length === 0) {
+      throw new Error("PDF inválido ou vazio.");
     }
 
-    const numPages = pdfDocument.numPages;
-    let extractedText = '';
+    const MAX_PAGES = 10; // Limite de páginas
+    // Desabilita o worker para evitar o erro
+    const pdf = await getDocument({
+      data: new Uint8Array(buffer),
+      disableWorker: true
+    }).promise;
+    const numPages = Math.min(pdf.numPages, MAX_PAGES);
+    const extractedText = [];
 
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      let page;
-      try {
-        page = await pdfDocument.getPage(pageNum);
-      } catch (error) {
-        throw new Error(`Erro ao obter a página ${pageNum}: ${error.message}`);
-      }
-
-      let textContent;
-      try {
-        textContent = await page.getTextContent();
-      } catch (error) {
-        throw new Error(`Erro ao obter o conteúdo de texto da página ${pageNum}: ${error.message}`);
-      }
-
-      const pageText = textContent.items.map((item) => item.str).join(' ');
-      extractedText += pageText + '\n';
+      const page = await pdf.getPage(pageNum);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(' ');
+      extractedText.push(pageText);
+      await page.cleanup(); // Libera memória imediatamente
     }
 
-    pdfDocument.cleanup();
+    await pdf.destroy(); // Destrói o documento completamente
+    return cleanText(extractedText.join('\n')).trim();
 
-    const cleanedText = cleanText(extractedText); // Limpeza do texto extraído
-
-    return cleanedText.trim();
   } catch (error) {
-    throw new Error('Erro ao extrair texto do PDF: ' + error.message);
+    throw new Error(`Erro ao extrair texto: ${error.message}`);
   }
 };

@@ -32,7 +32,12 @@ export const getSimuladoById = async (req, res) => {
 export const createSimulado = async (req, res) => {
   try {
     console.log('Dados recebidos:', req.body);
+    const loggedInUser = await getLoggedInUser();
 
+    // Verifica se o usuário está logado
+    if (!loggedInUser) {
+      return res.status(401).json({ error: 'Usuário não autenticado.' });
+    }
     // Remove a declaração duplicada
     const bodyFields = Object.keys(req.body).reduce((acc, key) => {
       acc[key.trim()] = req.body[key];
