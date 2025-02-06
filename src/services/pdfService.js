@@ -1,5 +1,8 @@
 import pkg from 'pdfjs-dist/legacy/build/pdf.js';
-const { getDocument } = pkg;
+const { getDocument, GlobalWorkerOptions } = pkg;
+
+// Desabilita o worker para evitar o erro
+GlobalWorkerOptions.workerSrc = null;
 
 // Função para limpar caracteres inválidos
 const cleanText = (text) => {
