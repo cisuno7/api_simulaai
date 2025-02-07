@@ -26,19 +26,57 @@ const fixJSON = (str) => {
     // Remove espaços desnecessários entre chaves e colchetes
     str = str.replace(/\{\s+/g, '{').replace(/\[\s+/g, '[');
     str = str.replace(/\s+\}/g, '}').replace(/\s+\]/g, ']');
-
     // Remove barras invertidas duplicadas
     str = str.replace(/\\+/g, '\\');
-
     // Substitui aspas escapadas corretamente
     str = str.replace(/\\"/g, '"');
-
+    // Remove vírgulas extras antes de fechar chaves ou colchetes
+    str = str.replace(/,\s*([}\]])/g, '$1');
     // Converte o JSON para objeto e depois de volta para string para normalizar
     const parsed = JSON.parse(str);
     return JSON.stringify(parsed, null, 2);
   } catch (error) {
     console.error('Erro ao corrigir JSON:', error.message);
     throw new Error(`JSON inválido após correção: ${str}`);
+  }
+};
+
+// Função para validar o esquema do JSON
+const validateJSONSchema = (data) => {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Resposta da IA não é um objeto válido.');
+  }
+
+  if (!Array.isArray(data.questions)) {
+    throw new Error('Campo "questions" deve ser um array.');
+  }
+
+  for (const question of data.questions) {
+    if (typeof question.question !== 'string') {
+      throw new Error('Campo "question" deve ser uma string.');
+    }
+
+    if (typeof question.options !== 'object' || Object.keys(question.options).length !== 4) {
+      throw new Error('Campo "options" deve conter exatamente 4 opções numeradas de 0 a 3.');
+    }
+
+    const validIndexes = ['0', '1', '2', '3'];
+    for (const index of validIndexes) {
+      if (!question.options.hasOwnProperty(index)) {
+        throw new Error(`Campo "options" está faltando a chave "${index}".`);
+      }
+      if (typeof question.options[index] !== 'string') {
+        throw new Error(`Valor da opção "${index}" deve ser uma string.`);
+      }
+    }
+
+    if (typeof question.correctAnswer.index !== 'string' || !validIndexes.includes(question.correctAnswer.index)) {
+      throw new Error('Campo "correctAnswer.index" deve ser um índice válido entre 0 e 3.');
+    }
+
+    if (typeof question.correctAnswer.userAnswer !== 'string' || question.correctAnswer.userAnswer !== '-1') {
+      throw new Error('Campo "correctAnswer.userAnswer" deve ser inicializado como "-1".');
+    }
   }
 };
 
@@ -54,33 +92,57 @@ export const generateQuestionsWithAI = async (pdfBuffer, questionCount, simulado
 
     // Cria o prompt para a IA
     const prompt = `
-Gere ${numQuestions} questões de múltipla escolha em português do Brasil sobre o seguinte texto:
+Você é um assistente especializado em gerar questões de múltipla escolha com base em um texto fornecido. Sua tarefa é criar ${numQuestions} perguntas com 4 alternativas (numeradas de 0 a 3) sobre o seguinte texto:
+
 "${shortenedText}"
 
-Cada questão deve ter:
-- Uma única resposta correta;
-- Quatro opções identificadas pelas letras "A", "B", "C" e "D";
-- A resposta correta deve ser representada por um objeto contendo a letra e o texto da opção correta.
+Regras para gerar as perguntas:
+1. Cada pergunta deve ser clara e diretamente relacionada ao conteúdo do texto.
+2. As 4 alternativas devem ser plausíveis e derivadas do texto fornecido.
+3. Apenas uma alternativa deve ser correta.
+4. Não inclua informações que não estejam explicitamente mencionadas no texto.
+5. Formate a resposta como um JSON estrito, SEM comentários ou texto extra. Use aspas duplas (\") para todos os campos e valores. Escape todas as aspas internas com \\".
 
-Formato da resposta em STRICT JSON SEM comentários ou texto extra. Use aspas duplas (\") para todos os campos e valores. Escape todas as aspas internas com \\". Exemplo válido:
+Formato da resposta esperada:
 {
   "simuladoId": "${simuladoId}",
   "questions": [
     {
-      "pergunta": "Texto da pergunta com \\"aspas\\" internas",
-      "opcoes": {
-        "A": "Opção A",
-        "B": "Opção B",
-        "C": "Opção C",
-        "D": "Opção D"
+      "question": "Texto da pergunta com \\"aspas\\" internas",
+      "options": {
+        "0": "Opção 0 derivada do texto",
+        "1": "Opção 1 derivada do texto",
+        "2": "Opção 2 derivada do texto",
+        "3": "Opção 3 derivada do texto"
       },
       "correctAnswer": {
-        "letra": "A",
-        "texto": "Opção A"
+        "index": "1",
+        "userAnswer": "-1"
       }
     }
   ]
-}`;
+}
+
+Exemplo de saída válida:
+{
+  "simuladoId": "123",
+  "questions": [
+    {
+      "question": "Qual é o principal problema enfrentado pelo personagem no texto?",
+      "options": {
+        "0": "Falta de dinheiro",
+        "1": "Solidão",
+        "2": "Problemas de saúde",
+        "3": "Falta de tempo"
+      },
+      "correctAnswer": {
+        "index": "1",
+        "userAnswer": "-1"
+      }
+    }
+  ]
+}
+`;
 
     // Variáveis para controle de retentativas
     let response;
@@ -132,19 +194,12 @@ Formato da resposta em STRICT JSON SEM comentários ou texto extra. Use aspas du
     const fixedResponseData = fixJSON(responseData);
     console.log('JSON corrigido:', fixedResponseData);
 
-    // Valida o JSON
-    const isValidJSON = (str) => {
-      try {
-        JSON.parse(str);
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    if (!isValidJSON(fixedResponseData)) {
-      console.error('JSON inválido após correção:', fixedResponseData);
-      throw new Error('Resposta da IA em formato incorreto após tentativa de correção.');
+    // Valida o JSON contra o esquema esperado
+    try {
+      validateJSONSchema(JSON.parse(fixedResponseData));
+    } catch (validationError) {
+      console.error('Erro de validação do JSON:', validationError.message);
+      throw new Error(`Erro de validação: ${validationError.message}`);
     }
 
     // Converte o JSON corrigido para um objeto JavaScript

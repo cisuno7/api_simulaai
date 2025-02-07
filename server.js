@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 console.log('OPENROUTER_API_KEY:', process.env.OPENROUTER_API_KEY);
 console.log('TEST_VARIABLE:', process.env.TEST_VARIABLE);
 
