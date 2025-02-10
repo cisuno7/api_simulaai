@@ -65,24 +65,39 @@ export const generateQuestionsWithAI = async (pdfBuffer, questionCount, simulado
     const shortenedText = cleanExtractedText(text.substring(0, 2000));
     console.log('Texto extraído:', shortenedText);
     console.log('Número de perguntas:', numQuestions);
-
     const prompt = `
-Gere ${numQuestions} questões de múltipla escolha em português do Brasil sobre o seguinte texto:
+Gere ${numQuestions} questões de múltipla escolha de nível avançado com base no seguinte trecho extraído de um documento:
 "${shortenedText}"
-Cada questão deve ter:
-- Uma única resposta correta;
-- Quatro opções identificadas;
-- A resposta correta deve ser representada pelo número do índice.
-Formato da resposta em STRICT JSON SEM comentários ou texto extra. Use aspas duplas para todos os campos e valores. Exemplo válido:
+
+⚠️ As questões devem:
+- Ser inspiradas em questões de concursos públicos e vestibulares renomados;
+- Exigir um alto nível de interpretação e análise crítica;
+- Conter pegadinhas e enunciados enganosos para levar o candidato ao erro caso ele não compreenda bem o contexto;
+- Apresentar alternativas que sejam muito semelhantes entre si, mas apenas uma está correta;
+- Criar armadilhas lógicas, utilizando palavras que induzam ao erro caso o candidato não tenha atenção total;
+- Evitar perguntas diretas e fáceis de responder apenas com memorização.
+
+⚠️ Formato das questões:
+- O enunciado deve ser desafiador e conter nuances que possam ser interpretadas de formas diferentes;
+- As alternativas devem apresentar termos técnicos e diferenças sutis para dificultar a escolha correta;
+- A pergunta deve forçar o candidato a refletir sobre o tema antes de marcar a alternativa.
+
+📌 A resposta correta deve ser representada pelo número do índice (0, 1, 2 ou 3) e o campo "userAnswer" deve ser inicializado com -1.
+
+⚠️ Responda ESTRITAMENTE no seguinte formato JSON, sem incluir explicações ou comentários:
 {
   "simuladoId": "${simuladoId}",
   "questions": [
+    {
       "question": "Texto da pergunta",
       "options": ["Opção 1", "Opção 2", "Opção 3", "Opção 4"],
       "correctAnswer": 1,
       "userAnswer": -1
+    }
   ]
-}`;
+}
+`;
+
 
     let response;
     let attempts = 0;
