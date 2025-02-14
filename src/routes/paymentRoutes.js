@@ -8,6 +8,7 @@ const client = new MercadoPagoConfig({
     options: { timeout: 5000 }
 });
 
+
 router.post("/create-payment", async (req, res) => {
     try {
         const { email } = req.body;
