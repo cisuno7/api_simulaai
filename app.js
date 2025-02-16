@@ -3,9 +3,9 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import simuladoRoutes from "./src/routes/simuladoRouters.js";
 import responseRoutes from "./src/routes/responseRouters.js";
-
-
 import paymentRoutes from "./src/routes/paymentRoutes.js";
+// import webhook from "./src/routes/webhook.js";
+
 
 
 import { errorHandler } from "./src/utils/errorHandler.js";
@@ -16,6 +16,21 @@ import { MercadoPagoConfig, Payment } from 'mercadopago';
 const app = express();
 
 
+
+
+// Permitir requisições do localhost:3000
+const corsOptions = {
+    origin: 'http://localhost:3000',  // Defina o domínio permitido
+    methods: ['GET', 'POST'],         // Métodos permitidos
+    allowedHeaders: ['Content-Type'], // Cabeçalhos permitidos
+};
+
+app.use(cors(corsOptions));  // Aplicando as configurações CORS
+
+// Outras configurações e rotas do seu servidor
+
+
+
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -24,6 +39,9 @@ app.use("/api/simulados", simuladoRoutes);
 app.use("/api/responses", responseRoutes);
 
 app.use("/api/payment", paymentRoutes);
+// app.use("/api/webhook", webhook);
+
+
 
 
 const client = new MercadoPagoConfig({

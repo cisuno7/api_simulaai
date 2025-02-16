@@ -32,9 +32,9 @@ router.post("/create-payment", async (req, res) => {
                 installments: 1
             },
             back_urls: {
-                success: "https://seusite.com/success",
-                failure: "https://seusite.com/failure",
-                pending: "https://seusite.com/pending"
+                success: "http://localhost:3000/sign-in",
+                failure: "http://localhost:3000/sign-up",
+                pending: "http://localhost:3000/sign-in"
             },
             auto_return: "approved"
         };
