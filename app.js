@@ -18,14 +18,20 @@ const app = express();
 
 
 
+const corsOptions = {
+    origin: [
+      'http://localhost:3000',           // Para desenvolvimento local
+      'https://simula-ai-eight.vercel.app' // Para produção
+    ],
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type'],
+  };
+  
+  app.use(cors(corsOptions));
+  
 
-app.use(cors(corsOptions));  // Aplicando as configurações CORS
-
-// Outras configurações e rotas do seu servidor
 
 
-
-app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
