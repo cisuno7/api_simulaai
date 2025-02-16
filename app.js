@@ -13,21 +13,7 @@ import { errorHandler } from "./src/utils/errorHandler.js";
 import 'dotenv/config'
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 
-const app = express();
-
-
-
-
-const corsOptions = {
-    origin: [
-      'http://localhost:3000',           // Para desenvolvimento local
-      'https://simula-ai-eight.vercel.app' // Para produção
-    ],
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type'],
-  };
-  
-  app.use(cors(corsOptions));
+const app = express()
   
 
 
