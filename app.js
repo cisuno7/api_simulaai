@@ -18,12 +18,6 @@ const app = express();
 
 
 
-// Permitir requisições do localhost:3000
-const corsOptions = {
-    origin: 'http://localhost:3000',  // Defina o domínio permitido
-    methods: ['GET', 'POST'],         // Métodos permitidos
-    allowedHeaders: ['Content-Type'], // Cabeçalhos permitidos
-};
 
 app.use(cors(corsOptions));  // Aplicando as configurações CORS
 
