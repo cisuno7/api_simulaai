@@ -32,9 +32,9 @@ router.post("/create-payment", async (req, res) => {
                 installments: 1
             },
             back_urls: {
-                success: "http://localhost:3000/sign-in",
-                failure: "http://localhost:3000/sign-up",
-                pending: "http://localhost:3000/sign-in"
+                success: "https://simula-ai-eight.vercel.app/sign-in",
+                failure: "https://simula-ai-eight.vercel.app/sign-up",
+                pending: "https://simula-ai-eight.vercel.app/sign-in"
             },
             auto_return: "approved"
         };
